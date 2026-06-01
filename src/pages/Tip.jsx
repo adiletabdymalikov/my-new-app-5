@@ -4,79 +4,75 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 
 export function Tip() {
   const [products, setProducts] = useState([]);      
+  const [categories, setCategories] = useState([]); 
   const [filtered, setFiltered] = useState([]);       
   const [searchText, setSearchText] = useState('');   
+  const [selectedCategory, setSelectedCategory] = useState(null); 
   const [cart, setCart] = useState([]);             
   const [orders, setOrders] = useState([]);          
 
-
   useEffect(() => {
-    axios.get('https://api.escuelajs.co/api/v1/products') 
-      .then(response => {
-        setProducts(response.data);
-        setFiltered(response.data); 
-      })
-      .catch(err => console.error("Ошибка при загрузке:", err));
+    Promise.all([
+      axios.get('https://api.escuelajs.co/api/v1/products'),
+      axios.get('https://api.escuelajs.co/api/v1/categories')
+    ])
+    .then(([prodRes, catRes]) => {
+      setProducts(prodRes.data);
+      setFiltered(prodRes.data); 
+      setCategories(catRes.data.slice(0, 6)); 
+    })
+    .catch(err => console.error("Ошибка при загрузке:", err));
   }, []);
 
-  
+  const applyFilters = (text, categoryId) => {
+    const result = products
+      .filter(item => !categoryId || (item.category && item.category.id === categoryId))
+      .filter(item => !text.trim() || (item.title && item.title.toLowerCase().includes(text.toLowerCase())));
+    setFiltered(result);
+  };
+
   const handleSearch = (text) => {
     setSearchText(text);
-
-    if (text.trim() === '') {
-      setFiltered(products); 
-      return;
-    }
-
-    
-    const searchResult = products.filter(item => 
-      item.title && item.title.toLowerCase().includes(text.toLowerCase())
-    );
-    setFiltered(searchResult);
+    applyFilters(text, selectedCategory);
   };
 
+  const handleCategorySelect = (categoryId) => {
+    setSelectedCategory(categoryId);
+    applyFilters(searchText, categoryId);
+  };
   const addToCart = (product) => {
-    const itemInCart = cart.find(item => item.id === product.id);
-    if (itemInCart) {
-      setCart(cart.map(item => 
-        item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
-      ));
-    } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
-    }
+    const isExist = cart.some(item => item.id === product.id);
+    setCart(isExist 
+      ? cart.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
+      : [...cart, { ...product, quantity: 1 }]
+    );
+  };
+  const removeFromCart = (productId) => {
+    const target = cart.find(item => item.id === productId);
+    setCart(target?.quantity === 1 
+      ? cart.filter(item => item.id !== productId)
+      : cart.map(item => item.id === productId ? { ...item, quantity: item.quantity - 1 } : item)
+    );
   };
 
-  
-  const removeFromCart = (productId) => {
-    const itemInCart = cart.find(item => item.id === productId);
-    if (itemInCart.quantity === 1) {
-      setCart(cart.filter(item => item.id !== productId));
-    } else {
-      setCart(cart.map(item => 
-        item.id === productId ? { ...item, quantity: item.quantity - 1 } : item
-      ));
-    }
-  };
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const handleCheckout = () => {
-    if (cart.length === 0) return;
+    if (!cart.length) return;
 
-    const newOrder = {
+    setOrders([{
       id: orders.length + 1,
       date: '28.05.26', 
       total: cartTotal,
       count: cart.reduce((sum, item) => sum + item.quantity, 0)
-    };
-
-    setOrders([newOrder, ...orders]); 
+    }, ...orders]); 
     setCart([]); 
   };
 
   return (
     <div className="container-fluid mt-4">
-   
       <h2 className="text-center fw-bold mb-3">Shopi</h2>
-      <div className="mx-auto mb-5" style={{ maxWidth: '400px' }}>
+      
+      <div className="mx-auto mb-4" style={{ maxWidth: '400px' }}>
         <input 
           type="text" 
           className="form-control p-2 text-center" 
@@ -87,38 +83,55 @@ export function Tip() {
         />
       </div>
 
+      <div className="d-flex justify-content-center gap-2 flex-wrap mb-5">
+        <button 
+          className={`btn btn-sm ${!selectedCategory ? 'btn-dark' : 'btn-outline-dark'}`}
+          onClick={() => handleCategorySelect(null)}
+          style={{ borderRadius: '20px', padding: '6px 15px' }}
+        >
+          All
+        </button>
+        {categories.map(cat => (
+          <button
+            key={cat.id}
+            className={`btn btn-sm ${selectedCategory === cat.id ? 'btn-dark' : 'btn-outline-dark'}`}
+            onClick={() => handleCategorySelect(cat.id)}
+            style={{ borderRadius: '20px', padding: '6px 15px' }}
+          >
+            {cat.name}
+          </button>
+        ))}
+      </div>
+
       <div className="row">
-      
         <div className="col-md-8">
           <h4 className="mb-4">Products</h4>
-          
           <div className="row g-3">
-            {filtered.length > 0 ? (
+            {filtered.length ? (
               filtered.map(item => (
                 <div key={item.id} className="col-sm-6 col-md-4">
                   <div className="card h-100 p-2 border-0 shadow-sm" style={{ borderRadius: '15px' }}>
-                    
-                
                     <button 
                       className="btn btn-dark position-absolute rounded-circle" 
-                      style={{ top: '15px', right: '15px', width: '32px', height: '32px', padding: 0 }}
+                      style={{ top: '15px', right: '15px', width: '32px', height: '32px', padding: 0, zIndex: 2 }}
                       onClick={() => addToCart(item)}
                     >
                       +
                     </button>
-
                     <img 
                       src={item.images?.[0]} 
                       alt={item.title} 
                       className="card-img-top rounded" 
                       style={{ height: '180px', objectFit: 'cover' }} 
+                      onError={(e) => { e.target.src = 'https://via.placeholder.com/180' }}
                     />
-                    
                     <div className="card-body px-1 py-2 d-flex justify-content-between align-items-center">
-                      <span className="text-muted small text-truncate me-2">{item.title}</span>
+                      <div className="text-truncate me-2" style={{ maxWidth: '70%' }}>
+                        <span className="text-dark small d-block text-truncate">{item.title}</span>
+                        <span className="text-muted" style={{ fontSize: '10px' }}>{item.category?.name}</span>
+                      </div>
                       <span className="fw-bold">${item.price}</span>
                     </div>
-
                   </div>
                 </div>
               ))
@@ -127,19 +140,17 @@ export function Tip() {
             )}
           </div>
         </div>
+
         <div className="col-md-4">
-        
           <div className="card p-3 border shadow-sm mb-4" style={{ borderRadius: '15px' }}>
             <h4 className="fw-normal border-bottom pb-2">My Order</h4>
-            
-            {cart.length === 0 ? (
+            {!cart.length ? (
               <p className="text-muted my-3 small">Your cart is empty.</p>
             ) : (
               <div>
                 {cart.map(item => (
                   <div key={item.id} className="d-flex justify-content-between align-items-center my-3">
                     <span className="small text-truncate" style={{ maxWidth: '140px' }}>{item.title}</span>
-                    
                     <div className="d-flex align-items-center gap-2">
                       <button className="btn btn-sm btn-light py-0" onClick={() => removeFromCart(item.id)}>-</button>
                       <span className="small fw-bold">{item.quantity}</span>
@@ -148,7 +159,6 @@ export function Tip() {
                     </div>
                   </div>
                 ))}
-
                 <div className="d-flex justify-content-between align-items-center border-top pt-2 mt-3">
                   <span className="text-muted">Total:</span>
                   <span className="fs-5 fw-bold">${cartTotal}</span>
@@ -160,7 +170,7 @@ export function Tip() {
 
           <div className="card p-3 border shadow-sm" style={{ borderRadius: '15px' }}>
             <h4 className="fw-normal border-bottom pb-2">My Orders</h4>
-            {orders.length === 0 ? (
+            {!orders.length ? (
               <p className="text-muted my-2 small">No orders yet.</p>
             ) : (
               <div className="d-flex flex-column gap-2 mt-2">
@@ -176,7 +186,6 @@ export function Tip() {
               </div>
             )}
           </div>
-
         </div>
       </div>
     </div>
