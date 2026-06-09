@@ -13,13 +13,26 @@ export function Tip() {
 
   useEffect(() => {
     Promise.all([
-      axios.get('https://api.escuelajs.co/api/v1/products'),
-      axios.get('https://api.escuelajs.co/api/v1/categories')
+      axios.get('https://fakestoreapi.com/products'),
+      axios.get('https://fakestoreapi.com/products/categories') 
     ])
     .then(([prodRes, catRes]) => {
-      setProducts(prodRes.data);
-      setFiltered(prodRes.data); 
-      setCategories(catRes.data.slice(0, 6)); 
+      const formattedCategories = catRes.data.map((name, index) => ({
+        id: index + 1,
+        name: name
+      }));
+      const formattedProducts = prodRes.data.map(item => ({
+        ...item,
+        images: [item.image], 
+        category: {
+          id: catRes.data.indexOf(item.category) + 1, 
+          name: item.category
+        }
+      }));
+
+      setProducts(formattedProducts);
+      setFiltered(formattedProducts); 
+      setCategories(formattedCategories.slice(0, 6)); 
     })
     .catch(err => console.error("Ошибка при загрузке:", err));
   }, []);
@@ -40,6 +53,7 @@ export function Tip() {
     setSelectedCategory(categoryId);
     applyFilters(searchText, categoryId);
   };
+
   const addToCart = (product) => {
     const isExist = cart.some(item => item.id === product.id);
     setCart(isExist 
@@ -47,6 +61,7 @@ export function Tip() {
       : [...cart, { ...product, quantity: 1 }]
     );
   };
+
   const removeFromCart = (productId) => {
     const target = cart.find(item => item.id === productId);
     setCart(target?.quantity === 1 
@@ -96,7 +111,7 @@ export function Tip() {
             key={cat.id}
             className={`btn btn-sm ${selectedCategory === cat.id ? 'btn-dark' : 'btn-outline-dark'}`}
             onClick={() => handleCategorySelect(cat.id)}
-            style={{ borderRadius: '20px', padding: '6px 15px' }}
+            style={{ borderRadius: '20px', padding: '6px 15px', textTransform: 'capitalize' }}
           >
             {cat.name}
           </button>
@@ -122,13 +137,13 @@ export function Tip() {
                       src={item.images?.[0]} 
                       alt={item.title} 
                       className="card-img-top rounded" 
-                      style={{ height: '180px', objectFit: 'cover' }} 
+                      style={{ height: '180px', objectFit: 'contain', background: '#fff' }} 
                       onError={(e) => { e.target.src = 'https://via.placeholder.com/180' }}
                     />
                     <div className="card-body px-1 py-2 d-flex justify-content-between align-items-center">
                       <div className="text-truncate me-2" style={{ maxWidth: '70%' }}>
                         <span className="text-dark small d-block text-truncate">{item.title}</span>
-                        <span className="text-muted" style={{ fontSize: '10px' }}>{item.category?.name}</span>
+                        <span className="text-muted" style={{ fontSize: '10px', textTransform: 'capitalize' }}>{item.category?.name}</span>
                       </div>
                       <span className="fw-bold">${item.price}</span>
                     </div>
